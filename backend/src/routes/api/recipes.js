@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
     try {
         const query = `
             SELECT r.id, r.name, r.price, 
-                   COALESCE(SUM(ri.quantity * i.price), 0) AS total_cost
+                   COALESCE(SUM(i.cost_per_standard_unit * ri.quantity), 0) AS calculated_cost
             FROM recipes r
             LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
             LEFT JOIN ingredients i ON ri.ingredient_id = i.id
@@ -60,7 +60,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const recipeResult = await pool.query('SELECT *, price AS selling_price FROM recipes WHERE id = $1', [id]);
+        const recipeResult = await pool.query('SELECT id, name, price AS selling_price, created_at FROM recipes WHERE id = $1', [id]);
 
         if (recipeResult.rows.length === 0) {
             return res.status(404).json({ msg: 'Recipe not found' });

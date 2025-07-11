@@ -7,8 +7,10 @@ DROP TABLE IF EXISTS recipes;
 CREATE TABLE ingredients (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
-    price DECIMAL(10,2) NOT NULL,
     standard_measurement_unit VARCHAR(50) NOT NULL,
+    purchase_pack_price DECIMAL(10, 2) NOT NULL,
+    pack_quantity_in_standard_units DECIMAL(10, 2) NOT NULL,
+    cost_per_standard_unit DECIMAL(10, 6) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -28,38 +30,37 @@ CREATE TABLE recipe_ingredients (
     PRIMARY KEY (recipe_id, ingredient_id)
 );
 
--- Sample data for ingredients
-INSERT INTO ingredients (name, price, standard_measurement_unit) VALUES
-('Chicken', 5.00, 'g'),
-('Rice', 2.00, 'g'),
-('Broccoli', 1.50, 'g'),
-('Carrots', 1.00, 'g'),
-('Potatoes', 0.50, 'g'),
-('Pasta', 1.20, 'g'),
-('Tomato Sauce', 1.80, 'ml'),
-('Cheese', 2.50, 'g'),
-('Olive Oil', 3.00, 'ml'),
-('Salt', 0.10, 'g');
-
 -- Sample data for recipes
 INSERT INTO recipes (name, price) VALUES
-('Chicken and Rice', 8.00),
-('Vegetarian Pasta', 6.00);
+('Chicken and Rice', 15.00),
+('Vegetarian Pasta', 12.00);
+
+-- Sample data for ingredients with new costing structure
+INSERT INTO ingredients 
+(name, standard_measurement_unit, purchase_pack_price, pack_quantity_in_standard_units, cost_per_standard_unit) 
+VALUES
+('Chicken', 'g', 15.00, 2000, (15.00 / 2000)),
+('Rice', 'g', 8.00, 5000, (8.00 / 5000)),
+('Broccoli', 'g', 2.00, 500, (2.00 / 500)),
+('Carrots', 'g', 1.50, 1000, (1.50 / 1000)),
+('Potatoes', 'g', 3.00, 2500, (3.00 / 2500)),
+('Pasta', 'g', 1.20, 500, (1.20 / 500)),
+('Tomato Sauce', 'ml', 2.25, 750, (2.25 / 750)),
+('Cheese', 'g', 4.00, 250, (4.00 / 250)),
+('Olive Oil', 'ml', 6.00, 500, (6.00 / 500)),
+('Salt', 'g', 1.00, 1000, (1.00 / 1000));
 
 -- Sample data for recipe_ingredients
--- Chicken and Rice (id = 1)
+-- Note: The recipe IDs will be 1 and 2 respectively
 INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) VALUES
-(1, 1, 200, 'g'),   -- Chicken
-(1, 2, 100, 'g'),   -- Rice
-(1, 4, 50, 'g'),    -- Carrots
-(1, 10, 2, 'g');    -- Salt
-
--- Vegetarian Pasta (id = 2)
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) VALUES
-(2, 6, 100, 'g'),   -- Pasta
-(2, 7, 100, 'ml'),  -- Tomato Sauce
-(2, 3, 50, 'g'),    -- Broccoli
-(2, 8, 30, 'g'),    -- Cheese
-(2, 9, 10, 'ml'),   -- Olive Oil
-(2, 10, 2, 'g');    -- Salt
+(1, 1, 200, 'g'),  -- Chicken in Chicken and Rice
+(1, 2, 100, 'g'),  -- Rice in Chicken and Rice
+(1, 4, 50, 'g'),   -- Carrots in Chicken and Rice
+(1, 10, 2, 'g'),   -- Salt in Chicken and Rice
+(2, 6, 100, 'g'),  -- Pasta in Vegetarian Pasta
+(2, 7, 100, 'ml'), -- Tomato Sauce in Vegetarian Pasta
+(2, 3, 50, 'g'),   -- Broccoli in Vegetarian Pasta
+(2, 8, 30, 'g'),   -- Cheese in Vegetarian Pasta
+(2, 9, 10, 'ml'),  -- Olive Oil in Vegetarian Pasta
+(2, 10, 2, 'g');   -- Salt in Vegetarian Pasta
 

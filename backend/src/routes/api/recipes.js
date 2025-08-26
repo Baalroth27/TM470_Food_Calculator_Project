@@ -149,18 +149,18 @@ router.delete('/:id', async (req, res) => {
 router.post('/:recipeId/ingredients', async (req, res) => {
     try {
         const { recipeId } = req.params;
-        const { ingredientId, quantity, unit } = req.body;
+        const { ingredient_id, quantity, unit } = req.body;
 
         // --- Validation ---
-        if (!ingredientId || quantity === undefined || !unit) {
-            return res.status(400).json({ msg: 'Please provide an ingredientId, quantity, and unit' });
+        if (!ingredient_id || quantity === undefined || !unit) {
+            return res.status(400).json({ msg: 'Please provide an ingredient_id, quantity, and unit' });
         }
 
         const newIngredient = await pool.query(
             `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit)
              VALUES ($1, $2, $3, $4)
              RETURNING *`,
-            [recipeId, ingredientId, quantity, unit]
+            [recipeId, ingredient_id, quantity, unit]
         );
 
         res.status(201).json(newIngredient.rows[0]);

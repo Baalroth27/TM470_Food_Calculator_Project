@@ -11,6 +11,7 @@ import {
   Alert,
 } from "react-native";
 import { Link, useFocusEffect } from "expo-router";
+import Constants from 'expo-constants';
 
 // Define a type for our ingredient object for TypeScript
 interface Ingredient {
@@ -29,25 +30,26 @@ const IngredientsScreen = () => {
 
   // --- Data Fetching ---
   useFocusEffect(
-  useCallback(() => {
-    const fetchIngredients = async () => {
-      setLoading(true); // Set loading true each time we focus
-      const apiUrl = 'http://192.168.1.14:3001/api/ingredients'; // ❗ Use your IP
-      try {
-        const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        setIngredients(data);
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+    useCallback(() => {
+      const fetchIngredients = async () => {
+        setLoading(true); // Set loading true each time we focus
+        const apiUrl = "http://192.168.1.14:3001/api/ingredients"; // ❗ Use your IP
+        try {
+          const response = await fetch(apiUrl);
+          if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+          const data = await response.json();
+          setIngredients(data);
+        } catch (e: any) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    fetchIngredients();
-  }, []) // Empty dependency array for useCallback
-);
+      fetchIngredients();
+    }, []) // Empty dependency array for useCallback
+  );
 
   // Memoize the filtered ingredients to avoid recalculating on every render
   const filteredIngredients = useMemo(() => {
@@ -62,17 +64,34 @@ const IngredientsScreen = () => {
   // --- Placeholder functions for button presses ---
   const handleSelect = () =>
     Alert.alert("Select Tapped", "Bulk delete logic will go here.");
-  const handleEdit = (id: number) =>
-    Alert.alert("Edit Tapped", `Edit ingredient with ID: ${id}`);
   const handleDelete = (id: number) => {
     Alert.alert(
       "Delete Ingredient",
-      "Are you sure you want to delete this ingredient?",
+      "Are you sure you want to delete this ingredient? This action cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
-          onPress: () => console.log(`Deleting ingredient with ID: ${id}`),
+          onPress: async () => {
+            const apiUrl = `http://192.168.1.14:3001/api/ingredients/${id}`; // ❗ Use your IP
+
+            try {
+              const response = await fetch(apiUrl, {
+                method: "DELETE",
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to delete the ingredient.");
+              }
+
+              // If the delete was successful, remove the item from the local state
+              setIngredients((currentIngredients) =>
+                currentIngredients.filter((ingredient) => ingredient.id !== id)
+              );
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
           style: "destructive",
         },
       ]
@@ -104,7 +123,7 @@ const IngredientsScreen = () => {
           <Text style={styles.headerButtonText}>Select</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ingredients</Text>
-        <Link href="/add-ingredient" asChild>
+        <Link href="/ingredient-form" asChild>
           <TouchableOpacity style={styles.headerButton}>
             <Text style={styles.headerButtonText}>+</Text>
           </TouchableOpacity>
@@ -120,12 +139,6 @@ const IngredientsScreen = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-      </View>
-
-      {/* List Header */}
-      <View style={styles.listHeader}>
-        <Text style={styles.listHeaderText}>Name</Text>
-        <Text style={styles.listHeaderText}>Price</Text>
       </View>
 
       {/* Ingredients List */}
@@ -148,12 +161,14 @@ const IngredientsScreen = () => {
               >
                 <Text style={styles.iconText}>🗑️</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleEdit(item.id)}
-                style={styles.iconButton}
+              <Link
+                href={{ pathname: "/ingredient-form", params: { id: item.id } }}
+                asChild
               >
-                <Text style={styles.iconText}>✍️</Text>
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.iconButton}>
+                  <Text style={styles.iconText}>✍️</Text>
+                </TouchableOpacity>
+              </Link>
             </View>
           </View>
         )}
@@ -165,13 +180,25 @@ const IngredientsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F5FF", // Light purple background from mockup
+    backgroundColor: "#F7F5FF",
+    paddingTop: Constants.statusBarHeight, // Adjust for status bar height
   },
   center: {
-    /* ... same as before ... */
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    padding: 20,
   },
+  text: {
+    color: '#fff',
+    marginTop: 10,
+    textAlign: 'center',
+},
   errorText: {
-    /* ... same as before ... */
+    color: '#ff4444',
+    fontSize: 16,
+    textAlign: 'center',
   },
 
   // Header Styles
@@ -255,7 +282,6 @@ const styles = StyleSheet.create({
   iconButton: {
     marginLeft: 15,
     padding: 5,
-    // WCAG: Ensure tap targets are large enough
     minWidth: 44,
     minHeight: 44,
     justifyContent: "center",

@@ -11,7 +11,8 @@ import {
   Alert,
 } from "react-native";
 import { Link, useFocusEffect } from "expo-router";
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
+import Checkbox from "expo-checkbox";
 
 // Define a type for our ingredient object for TypeScript
 interface Ingredient {
@@ -27,13 +28,15 @@ const IngredientsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // --- Data Fetching ---
   useFocusEffect(
     useCallback(() => {
       const fetchIngredients = async () => {
         setLoading(true); // Set loading true each time we focus
-        const apiUrl = "http://192.168.1.14:3001/api/ingredients"; // ❗ Use your IP
+        const apiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
         try {
           const response = await fetch(apiUrl);
           if (!response.ok)
@@ -61,9 +64,7 @@ const IngredientsScreen = () => {
     );
   }, [searchQuery, ingredients]);
 
-  // --- Placeholder functions for button presses ---
-  const handleSelect = () =>
-    Alert.alert("Select Tapped", "Bulk delete logic will go here.");
+  // --- Handlers ---
   const handleDelete = (id: number) => {
     Alert.alert(
       "Delete Ingredient",
@@ -73,7 +74,7 @@ const IngredientsScreen = () => {
         {
           text: "Delete",
           onPress: async () => {
-            const apiUrl = `http://192.168.1.14:3001/api/ingredients/${id}`; // ❗ Use your IP
+            const apiUrl = `http://192.168.1.12:3001/api/ingredients/${id}`; // ❗ Use your IP
 
             try {
               const response = await fetch(apiUrl, {
@@ -93,6 +94,62 @@ const IngredientsScreen = () => {
             }
           },
           style: "destructive",
+        },
+      ]
+    );
+  };
+
+  const handleToggleSelection = (id: number) => {
+    // Check if the ID is already in the array
+    if (selectedIds.includes(id)) {
+      // Remove it
+      setSelectedIds((current) => current.filter((item) => item !== id));
+    } else {
+      // Add it
+      setSelectedIds((current) => [...current, id]);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const selectedCount = selectedIds.length;
+    if (selectedCount === 0) {
+      Alert.alert("No Ingredients Selected", "Please select ingredients to delete.");
+      return;
+    }
+
+    Alert.alert(
+      "Delete Ingredients",
+      `Are you sure you want to delete ${selectedCount} ingredients? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const apiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
+            try {
+              const response = await fetch(apiUrl, {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ ids: selectedIds }),
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to delete the ingredients.");
+              }
+
+              // If the delete was successful, remove the items from the local state
+              setIngredients((currentIngredients) =>
+                currentIngredients.filter((ingredient) => !selectedIds.includes(ingredient.id))
+              );
+              setSelectedIds([]);
+              setIsSelectionMode(false);
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
         },
       ]
     );
@@ -119,15 +176,53 @@ const IngredientsScreen = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={handleSelect} style={styles.headerButton}>
-          <Text style={styles.headerButtonText}>Select</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ingredients</Text>
-        <Link href="/ingredient-form" asChild>
-          <TouchableOpacity style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>+</Text>
-          </TouchableOpacity>
-        </Link>
+        {/* Left Column */}
+        <View style={styles.headerLeft}>
+          {isSelectionMode ? (
+            <TouchableOpacity
+              onPress={() => {
+                setIsSelectionMode(false);
+                setSelectedIds([]);
+              }}
+            >
+              <Text style={styles.headerButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => setIsSelectionMode(true)}>
+              <Text style={styles.headerButtonText}>Select</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Center Column */}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Ingredients</Text>
+        </View>
+
+        {/* Right Column */}
+        <View style={styles.headerRight}>
+          {isSelectionMode ? (
+            <TouchableOpacity
+              onPress={handleBulkDelete}
+              disabled={selectedIds.length === 0}
+            >
+              <Text
+                style={[
+                  styles.headerButtonText,
+                  selectedIds.length === 0 ? styles.disabledButtonText : {},
+                ]}
+              >
+                Delete
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Link href="/ingredient-form" asChild>
+              <TouchableOpacity>
+                <Text style={styles.headerButtonText}>+</Text>
+              </TouchableOpacity>
+            </Link>
+          )}
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -146,31 +241,55 @@ const IngredientsScreen = () => {
         data={filteredIngredients}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.itemContainer}>
-            <View>
+          <TouchableOpacity
+            style={styles.itemContainer}
+            // Only allow tapping the row when in selection mode
+            onPress={
+              isSelectionMode ? () => handleToggleSelection(item.id) : undefined
+            }
+            activeOpacity={isSelectionMode ? 0.6 : 1.0} // Provide visual feedback on tap
+          >
+            {/* --- Conditional Checkbox --- */}
+            {isSelectionMode && (
+              <Checkbox
+                style={styles.checkbox}
+                value={selectedIds.includes(item.id)}
+                onValueChange={() => handleToggleSelection(item.id)}
+                color={selectedIds.includes(item.id) ? "#6200ee" : undefined}
+              />
+            )}
+
+            <View style={styles.itemContent}>
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.itemDetails}>
                 €{parseFloat(item.cost_per_standard_unit).toFixed(4)} /{" "}
                 {item.standard_measurement_unit}
               </Text>
             </View>
-            <View style={styles.itemActions}>
-              <TouchableOpacity
-                onPress={() => handleDelete(item.id)}
-                style={styles.iconButton}
-              >
-                <Text style={styles.iconText}>🗑️</Text>
-              </TouchableOpacity>
-              <Link
-                href={{ pathname: "/ingredient-form", params: { id: item.id } }}
-                asChild
-              >
-                <TouchableOpacity style={styles.iconButton}>
-                  <Text style={styles.iconText}>✍️</Text>
+
+            {/* --- Hide Action Buttons in Selection Mode --- */}
+            {!isSelectionMode && (
+              <View style={styles.itemActions}>
+                <TouchableOpacity
+                  onPress={() => handleDelete(item.id)}
+                  style={styles.iconButton}
+                >
+                  <Text style={styles.iconText}>🗑️</Text>
                 </TouchableOpacity>
-              </Link>
-            </View>
-          </View>
+                <Link
+                  href={{
+                    pathname: "/ingredient-form",
+                    params: { id: item.id },
+                  }}
+                  asChild
+                >
+                  <TouchableOpacity style={styles.iconButton}>
+                    <Text style={styles.iconText}>✍️</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
       />
     </SafeAreaView>
@@ -185,42 +304,53 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#121212',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#121212",
     padding: 20,
   },
   text: {
-    color: '#fff',
+    color: "#fff",
     marginTop: 10,
-    textAlign: 'center',
-},
+    textAlign: "center",
+  },
   errorText: {
-    color: '#ff4444',
+    color: "#ff4444",
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   // Header Styles
   headerContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingVertical: 10,
   },
-  headerButton: {
-    padding: 8,
+  headerLeft: {
+    flex: 1,
+    alignItems: "flex-start", // Aligns content to the left
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: "center", // Aligns content to the center
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: "flex-end", // Aligns content to the right
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#000",
   },
   headerButtonText: {
     fontSize: 18,
-    color: "#000",
-    fontWeight: "bold",
+    color: "#6200ee",
+    fontWeight: "500",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#000",
+  disabledButtonText: {
+    color: "#ccc",
   },
 
   // Search Bar Styles
@@ -289,6 +419,12 @@ const styles = StyleSheet.create({
   },
   iconText: {
     fontSize: 20,
+  },
+  itemContent: {
+    flex: 1, // Allows the name/details to take up the remaining space
+  },
+  checkbox: {
+    marginRight: 15,
   },
 });
 

@@ -28,7 +28,7 @@ const RecipeFormScreen = () => {
     if (isEditing) {
       setLoading(true);
       const fetchRecipeData = async () => {
-        const apiUrl = `http://192.168.1.14:3001/api/recipes/${id}`; // ❗ Use your IP
+        const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
         try {
           const response = await fetch(apiUrl);
           if (!response.ok) throw new Error("Failed to fetch recipe data");
@@ -61,8 +61,8 @@ const RecipeFormScreen = () => {
 
     setLoading(true);
     const apiUrl = isEditing
-      ? `http://192.168.1.14:3001/api/recipes/${id}` // ❗ Use your IP
-      : "http://192.168.1.14:3001/api/recipes"; // ❗ Use your IP
+      ? `http://192.168.1.12:3001/api/recipes/${id}` // ❗ Use your IP
+      : "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
     const method = isEditing ? "PUT" : "POST";
 
     try {

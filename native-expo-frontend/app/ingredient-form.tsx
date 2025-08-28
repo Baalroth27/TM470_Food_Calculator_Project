@@ -32,7 +32,7 @@ const IngredientFormScreen = () => {
       setIsEditing(true);
       setLoading(true);
       const fetchIngredientData = async () => {
-        const apiUrl = `http://192.168.1.14:3001/api/ingredients/${id}`; // ❗ Use your IP
+        const apiUrl = `http://192.168.1.12:3001/api/ingredients/${id}`; // ❗ Use your IP
         try {
           const response = await fetch(apiUrl);
           if (!response.ok) throw new Error("Failed to fetch ingredient data");
@@ -76,8 +76,8 @@ const IngredientFormScreen = () => {
     setLoading(true);
     // Determine the URL and Method based on whether we are editing
     const apiUrl = isEditing
-      ? `http://192.168.1.14:3001/api/ingredients/${id}`
-      : "http://192.168.1.14:3001/api/ingredients";
+      ? `http://192.168.1.12:3001/api/ingredients/${id}`
+      : "http://192.168.1.12:3001/api/ingredients";
     const method = isEditing ? "PUT" : "POST";
 
     try {

@@ -60,8 +60,8 @@ const RecipeDetailScreen = () => {
     setLoading(true);
     setError(null);
     try {
-      const recipeApiUrl = `http://192.168.1.14:3001/api/recipes/${id}`; // ❗ Use your IP
-      const ingredientsApiUrl = "http://192.168.1.14:3001/api/ingredients"; // ❗ Use your IP
+      const recipeApiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
+      const ingredientsApiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
 
       const [recipeResponse, ingredientsResponse] = await Promise.all([
         fetch(recipeApiUrl),
@@ -112,7 +112,7 @@ const RecipeDetailScreen = () => {
 
     // Fetch Logic
     setIsAdding(true);
-    const apiUrl = `http://192.168.1.14:3001/api/recipes/${id}/ingredients`; // ❗ Use your IP
+    const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients`; // ❗ Use your IP
 
     try {
       const body = {
@@ -182,7 +182,7 @@ const startEditing = (item: RecipeIngredient) => {
       Alert.alert("Error", "Please enter a valid quantity.");
       return;
     }
-    const apiUrl = `http://192.168.1.14:3001/api/recipes/${id}/ingredients/${editingIngredientId}`; // ❗ Use your IP
+    const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients/${editingIngredientId}`; // ❗ Use your IP
     try {
       const response = await fetch(apiUrl, {
         method: "PUT",
@@ -208,7 +208,7 @@ const startEditing = (item: RecipeIngredient) => {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = `http://192.168.1.14:3001/api/recipes/${id}/ingredients/${ingredientId}`; // ❗ Use your IP
+            const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients/${ingredientId}`; // ❗ Use your IP
             try {
               const response = await fetch(apiUrl, { method: "DELETE" });
               if (!response.ok) throw new Error("Failed to remove ingredient");

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
   TextInput,
   TouchableOpacity,
-  Alert
-} from 'react-native';
-import { useFocusEffect, Link } from 'expo-router';
-import Constants from 'expo-constants';
+  Alert,
+} from "react-native";
+import { useFocusEffect, Link } from "expo-router";
+import Constants from "expo-constants";
+import Checkbox from "expo-checkbox";
 
 // Define a type for our recipe object
 interface Recipe {
@@ -22,19 +23,23 @@ interface Recipe {
 }
 
 const RecipesScreen = () => {
+  // --- State Management ---
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       const fetchRecipes = async () => {
         setLoading(true);
-        const apiUrl = 'http://192.168.1.14:3001/api/recipes'; // ❗ Use your IP
+        const apiUrl = "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
         try {
           const response = await fetch(apiUrl);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
           const data = await response.json();
           setRecipes(data);
         } catch (e: any) {
@@ -47,11 +52,101 @@ const RecipesScreen = () => {
       fetchRecipes();
     }, [])
   );
-  
-  // Placeholder functions for now
-  const handleSelect = () => Alert.alert('Select Tapped', 'Bulk recipe delete logic will go here.');
-  const handleDelete = (id: number) => Alert.alert('Delete Tapped', `Delete recipe with ID: ${id}`);
-  
+
+  // --- Handlers ---
+  const handleDelete = (id: number) => {
+    Alert.alert(
+      "Delete Recipe", // <-- FIX 1
+      "Are you sure you want to delete this recipe? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
+
+            try {
+              const response = await fetch(apiUrl, {
+                method: "DELETE",
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to delete the recipe.");
+              }
+
+              // If the delete was successful, remove the item from the local state
+              setRecipes(
+                (currentRecipes) =>
+                  currentRecipes.filter((recipe) => recipe.id !== id) // <-- FIX 2
+              );
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    const selectedCount = selectedIds.length;
+    if (selectedCount === 0) {
+      Alert.alert("No Recipes Selected", "Please select recipes to delete.");
+      return;
+    }
+
+    Alert.alert(
+      "Delete Recipes",
+      `Are you sure you want to delete ${selectedCount} recipes? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const apiUrl = "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
+            try {
+              const response = await fetch(apiUrl, {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ ids: selectedIds }),
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to delete the recipes.");
+              }
+
+              // If the delete was successful, remove the items from the local state
+              setRecipes((currentRecipes) =>
+                currentRecipes.filter(
+                  (recipe) => !selectedIds.includes(recipe.id)
+                )
+              );
+              setSelectedIds([]);
+              setIsSelectionMode(false);
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleToggleSelection = (id: number) => {
+    // Check if the ID is already in the array
+    if (selectedIds.includes(id)) {
+      // Remove it
+      setSelectedIds((current) => current.filter((item) => item !== id));
+    } else {
+      // Add it
+      setSelectedIds((current) => [...current, id]);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -72,15 +167,53 @@ const RecipesScreen = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={handleSelect} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>Select</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Recipes</Text>
-        <Link href="/recipe-form" asChild>
-            <TouchableOpacity style={styles.headerButton}>
-                <Text style={styles.headerButtonText}>+</Text>
+        {/* Left Column */}
+        <View style={styles.headerLeft}>
+          {isSelectionMode ? (
+            <TouchableOpacity
+              onPress={() => {
+                setIsSelectionMode(false);
+                setSelectedIds([]);
+              }}
+            >
+              <Text style={styles.headerButtonText}>Cancel</Text>
             </TouchableOpacity>
-        </Link>
+          ) : (
+            <TouchableOpacity onPress={() => setIsSelectionMode(true)}>
+              <Text style={styles.headerButtonText}>Select</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Center Column */}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Recipes</Text>
+        </View>
+
+        {/* Right Column */}
+        <View style={styles.headerRight}>
+          {isSelectionMode ? (
+            <TouchableOpacity
+              onPress={handleBulkDelete}
+              disabled={selectedIds.length === 0}
+            >
+              <Text
+                style={[
+                  styles.headerButtonText,
+                  selectedIds.length === 0 ? styles.disabledButtonText : {},
+                ]}
+              >
+                Delete
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Link href="/recipe-form" asChild>
+              <TouchableOpacity>
+                <Text style={styles.headerButtonText}>+</Text>
+              </TouchableOpacity>
+            </Link>
+          )}
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -96,27 +229,51 @@ const RecipesScreen = () => {
 
       {/* Recipes List */}
       <FlatList
-        data={recipes.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))}
+        data={recipes.filter((r) =>
+          r.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.itemContainer}>
-            <View>
+          <TouchableOpacity
+            style={styles.itemContainer}
+            // Only allow tapping the row when in selection mode
+            onPress={
+              isSelectionMode ? () => handleToggleSelection(item.id) : undefined
+            }
+            activeOpacity={isSelectionMode ? 0.6 : 1.0} // Provide visual feedback on tap
+          >
+            {/* --- Conditional Checkbox --- */}
+            {isSelectionMode && (
+              <Checkbox
+                style={styles.checkbox}
+                value={selectedIds.includes(item.id)}
+                onValueChange={() => handleToggleSelection(item.id)}
+                color={selectedIds.includes(item.id) ? "#6200ee" : undefined}
+              />
+            )}
+            <View style={styles.itemContent}>
               <Text style={styles.itemName}>{item.name}</Text>
               <Text style={styles.itemDetails}>
                 Cost: €{parseFloat(item.calculated_cost).toFixed(2)}
               </Text>
             </View>
-            <View style={styles.itemActions}>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.iconButton}>
-                <Text style={styles.iconText}>🗑️</Text>
-              </TouchableOpacity>
-              <Link href={`/recipes/${item.id}`} asChild>
-                <TouchableOpacity style={styles.iconButton}>
-                   <Text style={styles.iconText}>✍️</Text>
+
+            {!isSelectionMode && (
+              <View style={styles.itemActions}>
+                <TouchableOpacity
+                  onPress={() => handleDelete(item.id)}
+                  style={styles.iconButton}
+                >
+                  <Text style={styles.iconText}>🗑️</Text>
                 </TouchableOpacity>
-              </Link>
-            </View>
-          </View>
+                <Link href={`/recipes/${item.id}`} asChild>
+                  <TouchableOpacity style={styles.iconButton}>
+                    <Text style={styles.iconText}>✍️</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
       />
     </SafeAreaView>
@@ -131,40 +288,54 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#121212',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#121212",
     padding: 20,
   },
   text: {
-    color: '#fff',
+    color: "#fff",
     marginTop: 10,
-    textAlign: 'center',
-},
+    textAlign: "center",
+  },
   errorText: {
-    color: '#ff4444',
+    color: "#ff4444",
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   // Header Styles
   headerContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingVertical: 10,
+  },
+  headerLeft: {
+    flex: 1,
+    alignItems: "flex-start", // Aligns content to the left
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: "center", // Aligns content to the center
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: "flex-end", // Aligns content to the right
   },
   headerButton: {
     padding: 8,
   },
   headerButtonText: {
     fontSize: 18,
-    color: "#000",
-    fontWeight: "bold",
+    color: "#6200ee",
+    fontWeight: "500",
+  },
+  disabledButtonText: {
+    color: "#ccc",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
     color: "#000",
   },
@@ -235,6 +406,12 @@ const styles = StyleSheet.create({
   },
   iconText: {
     fontSize: 20,
+  },
+  itemContent: {
+    flex: 1, // Allows the name/details to take up the remaining space
+  },
+  checkbox: {
+    marginRight: 15,
   },
 });
 

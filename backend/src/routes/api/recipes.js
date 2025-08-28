@@ -235,4 +235,40 @@ router.delete('/:recipeId/ingredients/:ingredientId', async (req, res) => {
     }
 });
 
+// DELETE multiple recipes
+// @route DELETE /api/recipes
+// @desc Remove multiple recipes by IDs
+router.delete("/", async (req, res) => {
+  const { ids } = req.body;
+  // --- Validation ---
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res
+      .status(400)
+      .json({ msg: "Please provide an array of IDs to delete." });
+  }
+  const sanitizedIds = ids.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
+  if (sanitizedIds.length !== ids.length) {
+    return res.status(400).json({ msg: "All IDs must be valid integers." });
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM recipes WHERE id = ANY($1::int[])`,
+      [sanitizedIds]
+    );
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ msg: "None of the provided recipe IDs were found." });
+    }
+    res.json({
+      msg: `${result.rowCount} Recipe(s) deleted successfully.`,
+      deleted: result.rowCount,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server error");
+  }
+});
+
 module.exports = router;

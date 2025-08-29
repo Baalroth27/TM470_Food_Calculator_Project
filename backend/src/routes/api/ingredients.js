@@ -2,13 +2,26 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db");
 
-// READ all ingredients
+// READ paginated ingredients
 // @route GET /api/ingredients
-// @desc Get all ingredients
+// @desc Get paginated ingredients
 router.get("/", async (req, res) => {
+  const page = parseInt(req.query.page || "1", 10);
+  const limit = parseInt(req.query.limit || "20", 10);
+  const offset = (page - 1) * limit;
+
   try {
-    const result = await pool.query("SELECT * FROM ingredients ORDER BY name");
-    res.json(result.rows);
+    const totalResult = await pool.query("SELECT COUNT(*) FROM ingredients");
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const itemsResult = await pool.query(
+      "SELECT * FROM ingredients ORDER BY name ASC LIMIT $1 OFFSET $2",
+      [limit, offset]
+    );
+    res.json({
+      items: itemsResult.rows,
+      total: totalItems,
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server error");
@@ -171,7 +184,9 @@ router.delete("/", async (req, res) => {
       .status(400)
       .json({ msg: "Please provide an array of IDs to delete." });
   }
-  const sanitizedIds = ids.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
+  const sanitizedIds = ids
+    .map((id) => parseInt(id, 10))
+    .filter((id) => !isNaN(id));
   if (sanitizedIds.length !== ids.length) {
     return res.status(400).json({ msg: "All IDs must be valid integers." });
   }

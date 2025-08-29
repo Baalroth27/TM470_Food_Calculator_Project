@@ -25,6 +25,9 @@ interface Ingredient {
 const IngredientsScreen = () => {
   // --- State Management ---
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -34,15 +37,22 @@ const IngredientsScreen = () => {
   // --- Data Fetching ---
   useFocusEffect(
     useCallback(() => {
-      const fetchIngredients = async () => {
-        setLoading(true); // Set loading true each time we focus
-        const apiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
+      const fetchInitialData = async () => {
+        setLoading(true);
+        setError(null);
+        // Always fetch page 1 when the screen is focused
+        const apiUrl = "http://192.168.1.12:3001/api/ingredients?page=1&limit=20"; // ❗ Use your IP
+
         try {
           const response = await fetch(apiUrl);
           if (!response.ok)
             throw new Error(`HTTP error! status: ${response.status}`);
+
           const data = await response.json();
-          setIngredients(data);
+
+          setIngredients(data.items); // Set the first page of items
+          setTotalItems(data.total); // Set the total count
+          setPage(1); // Reset the page count
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -50,11 +60,38 @@ const IngredientsScreen = () => {
         }
       };
 
-      fetchIngredients();
-    }, []) // Empty dependency array for useCallback
+      fetchInitialData();
+    }, [])
   );
 
-  // Memoize the filtered ingredients to avoid recalculating on every render
+  const loadMoreItems = async () => {
+    // Prevent fetching if we're already loading or if we've loaded all items
+    if (isLoadingMore || ingredients.length >= totalItems) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    const nextPage = page + 1; // Get the next page number
+    const apiUrl = "http://192.168.1.12:3001/api/ingredients?page=${nextPage}&limit=20"; // ❗ Use your IP
+
+    try {
+      const response = await fetch(apiUrl);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+
+      // Append the new items to the existing list
+      setIngredients((prevIngredients) => [...prevIngredients, ...data.items]);
+      setPage(nextPage); // Update the page number
+    } catch (e: any) {
+      console.error("Failed to load more items:", e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Memoise the filtered ingredients to avoid recalculating on every render
   const filteredIngredients = useMemo(() => {
     if (!searchQuery) {
       return ingredients;
@@ -74,7 +111,7 @@ const IngredientsScreen = () => {
         {
           text: "Delete",
           onPress: async () => {
-            const apiUrl = `http://192.168.1.12:3001/api/ingredients/${id}`; // ❗ Use your IP
+            const apiUrl = "http://192.168.1.12:3001/api/ingredients/${id}"; // ❗ Use your IP
 
             try {
               const response = await fetch(apiUrl, {
@@ -113,7 +150,10 @@ const IngredientsScreen = () => {
   const handleBulkDelete = () => {
     const selectedCount = selectedIds.length;
     if (selectedCount === 0) {
-      Alert.alert("No Ingredients Selected", "Please select ingredients to delete.");
+      Alert.alert(
+        "No Ingredients Selected",
+        "Please select ingredients to delete."
+      );
       return;
     }
 
@@ -142,7 +182,9 @@ const IngredientsScreen = () => {
 
               // If the delete was successful, remove the items from the local state
               setIngredients((currentIngredients) =>
-                currentIngredients.filter((ingredient) => !selectedIds.includes(ingredient.id))
+                currentIngredients.filter(
+                  (ingredient) => !selectedIds.includes(ingredient.id)
+                )
               );
               setSelectedIds([]);
               setIsSelectionMode(false);
@@ -291,6 +333,17 @@ const IngredientsScreen = () => {
             )}
           </TouchableOpacity>
         )}
+        onEndReached={loadMoreItems} // Call loadMoreItems when the end is reached
+        onEndReachedThreshold={0.5}  // Trigger when halfway through the list
+        ListFooterComponent={() =>
+          isLoadingMore ? (
+            <ActivityIndicator
+              size="large"
+              color="#6200ee"
+              style={{ marginVertical: 20 }}
+            />
+          ) : null
+        }
       />
     </SafeAreaView>
   );

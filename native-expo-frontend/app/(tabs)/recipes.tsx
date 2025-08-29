@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,9 @@ interface Recipe {
 const RecipesScreen = () => {
   // --- State Management ---
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,15 +36,20 @@ const RecipesScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      const fetchRecipes = async () => {
+      const fetchInitialData = async () => {
         setLoading(true);
-        const apiUrl = "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
+        setError(null);
+        const apiUrl = "http://192.168.1.12:3001/api/recipes?page=1&limit=20"; // ❗ Use your IP
         try {
           const response = await fetch(apiUrl);
           if (!response.ok)
             throw new Error(`HTTP error! status: ${response.status}`);
+
           const data = await response.json();
-          setRecipes(data);
+
+          setRecipes(data.items); // Set the first page of recipes
+          setTotalItems(data.total); // Set the total count
+          setPage(1); // Reset the page count
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -49,9 +57,46 @@ const RecipesScreen = () => {
         }
       };
 
-      fetchRecipes();
+      fetchInitialData();
     }, [])
   );
+
+  const loadMoreItems = async () => {
+    // Prevent fetching if we're already loading or if we've loaded all items
+    if (isLoadingMore || recipes.length >= totalItems) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    const apiUrl = `http://192.168.1.12:3001/api/recipes?page=${nextPage}&limit=20`; // ❗ Use your IP
+
+    try {
+      const response = await fetch(apiUrl);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+
+      // Append the new recipes to the existing list
+      setRecipes((prevRecipes) => [...prevRecipes, ...data.items]);
+      setPage(nextPage);
+    } catch (e: any) {
+      console.error("Failed to load more items:", e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Memoize the filtered recipes to avoid recalculating on every render
+  const filteredRecipes = useMemo(() => {
+    if (!searchQuery) {
+      return recipes;
+    }
+    return recipes.filter((recipe) =>
+      recipe.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, recipes]);
 
   // --- Handlers ---
   const handleDelete = (id: number) => {
@@ -64,7 +109,7 @@ const RecipesScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
+            const apiUrl = "http://192.168.1.12:3001/api/recipes/${id}"; // ❗ Use your IP
 
             try {
               const response = await fetch(apiUrl, {
@@ -76,9 +121,8 @@ const RecipesScreen = () => {
               }
 
               // If the delete was successful, remove the item from the local state
-              setRecipes(
-                (currentRecipes) =>
-                  currentRecipes.filter((recipe) => recipe.id !== id) // <-- FIX 2
+              setRecipes((currentRecipes) =>
+                currentRecipes.filter((recipe) => recipe.id !== id)
               );
             } catch (error: any) {
               Alert.alert("Error", error.message);
@@ -229,9 +273,7 @@ const RecipesScreen = () => {
 
       {/* Recipes List */}
       <FlatList
-        data={recipes.filter((r) =>
-          r.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )}
+        data={filteredRecipes}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -275,6 +317,17 @@ const RecipesScreen = () => {
             )}
           </TouchableOpacity>
         )}
+        onEndReached={loadMoreItems} // Call loadMoreItems when the end is reached
+        onEndReachedThreshold={0.5}  // Trigger when halfway through the list
+        ListFooterComponent={() =>
+          isLoadingMore ? (
+            <ActivityIndicator
+              size="large"
+              color="#6200ee"
+              style={{ marginVertical: 20 }}
+            />
+          ) : null
+        }
       />
     </SafeAreaView>
   );

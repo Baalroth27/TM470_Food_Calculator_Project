@@ -85,16 +85,16 @@ VALUES
 ('Flour', 'g', 1.50, 1000, (1.50 / 1000)),
 ('Sugar', 'g', 1.80, 1000, (1.80 / 1000)),
 ('Butter', 'g', 3.00, 250, (3.00 / 250)),
-('Eggs', 'piece', 3.20, 12, (3.20 / 12)),
+('Eggs', 'pc', 3.20, 12, (3.20 / 12)),
 ('Milk', 'ml', 1.10, 1000, (1.10 / 1000)),
 ('Cream', 'ml', 2.50, 500, (2.50 / 500)),
-('Baguette', 'piece', 1.00, 1, (1.00 / 1)),
+('Baguette', 'pc', 1.00, 1, (1.00 / 1)),
 ('White Wine Vinegar', 'ml', 2.80, 500, (2.80 / 500)),
 ('Black Pepper', 'g', 2.00, 100, (2.00 / 100)),
 ('Paprika', 'g', 1.50, 100, (1.50 / 100)),
 ('Dried Oregano', 'g', 1.20, 50, (1.20 / 50)),
 ('Canned Tomatoes', 'g', 0.90, 400, (0.90 / 400)),
-('Lemon', 'piece', 1.50, 3, (1.50 / 3));
+('Lemon', 'pc', 1.50, 3, (1.50 / 3));
 
 -- Sample data for recipe_ingredients
 INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) VALUES

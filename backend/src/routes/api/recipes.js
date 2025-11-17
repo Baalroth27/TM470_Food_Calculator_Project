@@ -33,7 +33,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// READ all recipes and calculate cost
+// READ paginated recipes and calculate cost
 // @route GET /api/recipes
 // @desc Get all recipes and their total cost
 router.get("/", async (req, res) => {
@@ -75,33 +75,46 @@ router.get("/", async (req, res) => {
 // @route GET /api/recipes/:id
 // @desc Get a recipe by ID and its list of ingredients
 router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const { id } = req.params;
-    const recipeResult = await pool.query(
-      "SELECT id, name, price AS selling_price, created_at FROM recipes WHERE id = $1",
-      [id]
-    );
+    // Get the main recipe details, including the new yield columns and calculated cost
+    const recipeQuery = `
+      SELECT 
+        r.id, 
+        r.name, 
+        r.price AS selling_price,
+        r.final_yield_weight_grams,
+        r.serving_portions,
+        COALESCE(SUM(i.cost_per_standard_unit * ri.quantity), 0) AS calculated_cost
+      FROM recipes r
+      LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+      LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+      WHERE r.id = $1
+      GROUP BY r.id, r.name, r.price;
+    `;
+    const recipeResult = await pool.query(recipeQuery, [id]);
 
     if (recipeResult.rows.length === 0) {
-      return res.status(404).json({ msg: "Recipe not found" });
+      return res.status(404).json({ msg: `Recipe with ID ${id} not found.` });
     }
 
-    const recipe = recipeResult.rows[0];
+    // Get the list of ingredients for this recipe
+    const ingredientsQuery = `
+      SELECT i.id as ingredient_id, i.name, ri.quantity, ri.unit
+      FROM recipe_ingredients ri
+      JOIN ingredients i ON ri.ingredient_id = i.id
+      WHERE ri.recipe_id = $1;
+    `;
+    const ingredientsResult = await pool.query(ingredientsQuery, [id]);
 
-    const ingredientsResult = await pool.query(
-      `SELECT i.id AS ingredient_id, i.name, ri.quantity, ri.unit
-             FROM recipe_ingredients ri
-             JOIN ingredients i ON ri.ingredient_id = i.id
-             WHERE ri.recipe_id = $1`,
-      [id]
-    );
+    // Combine the results into a single object for the response
+    const finalRecipe = {
+      ...recipeResult.rows[0],
+      ingredients: ingredientsResult.rows,
+    };
 
-    const ingredients = ingredientsResult.rows;
-
-    res.json({
-      ...recipe,
-      ingredients: ingredients,
-    });
+    res.json(finalRecipe);
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server Error");
@@ -135,6 +148,52 @@ router.put("/:id", async (req, res) => {
     }
 
     res.json(updatedRecipe.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+});
+
+// UPDATE a recipe's yield information
+// @route PATCH /api/recipes/:id/yield
+// @desc Update a recipe's final yield weight
+router.patch("/:id/yield", async (req, res) => {
+  const { id } = req.params;
+  const { final_yield_weight_grams, serving_portions } = req.body;
+
+  const fields = [];
+  const values = [];
+  let queryIndex = 1;
+
+  // Dynamically build the query based on the provided fields
+  if (final_yield_weight_grams !== undefined) {
+    fields.push(`final_yield_weight_grams = $${queryIndex++}`);
+    values.push(final_yield_weight_grams);
+  }
+  if (serving_portions !== undefined) {
+    fields.push(`serving_portions = $${queryIndex++}`);
+    values.push(serving_portions);
+  }
+
+  // If no valid fields were provided, return an error
+  if (fields.length === 0) {
+    return res.status(400).json({ msg: "No valid fields to update." });
+  }
+
+  values.push(id); // Add the recipe ID as the final parameter for the WHERE clause
+
+  const updateQuery = `UPDATE recipes SET ${fields.join(
+    ", "
+  )} WHERE id = $${queryIndex}`;
+
+  try {
+    const result = await pool.query(updateQuery, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ msg: `Recipe with ID ${id} not found.` });
+    }
+
+    res.json({ msg: "Yield information updated successfully." });
   } catch (err) {
     console.error(err.message);
     res.status(500).send("Server Error");
@@ -193,11 +252,9 @@ router.post("/:recipeId/ingredients", async (req, res) => {
     console.error(err.message);
     // Handle case where ingredient is already in the recipe (unique constraint violation)
     if (err.code === "23505") {
-      return res
-        .status(400)
-        .json({
-          msg: "This ingredient is already in this recipe. Please update the quantity instead.",
-        });
+      return res.status(400).json({
+        msg: "This ingredient is already in this recipe. Please update the quantity instead.",
+      });
     }
     // Handle case where ingredient_id or recipe_id does not exist (foreign key constraint violation)
     if (err.code === "23503") {

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { useRouter, useLocalSearchParams, Stack } from "expo-router";
+import { API_BASE_URL } from '../utils/api';
 
 const RecipeFormScreen = () => {
   const router = useRouter();
@@ -28,7 +29,7 @@ const RecipeFormScreen = () => {
     if (isEditing) {
       setLoading(true);
       const fetchRecipeData = async () => {
-        const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
+        const apiUrl = `${API_BASE_URL}/recipes/${id}`;
         try {
           const response = await fetch(apiUrl);
           if (!response.ok) throw new Error("Failed to fetch recipe data");
@@ -61,14 +62,14 @@ const RecipeFormScreen = () => {
 
     setLoading(true);
     const apiUrl = isEditing
-      ? `http://192.168.1.12:3001/api/recipes/${id}` // ❗ Use your IP
-      : "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
+      ? `${API_BASE_URL}/recipes/${id}`
+      : `${API_BASE_URL}/recipes`;
     const method = isEditing ? "PUT" : "POST";
 
     try {
       const body = {
         name: formData.name,
-        price: parseFloat(formData.price), // The API expects 'price'
+        price: parseFloat(formData.price.replace(",", ".")), // The API expects 'price'
       };
 
       const response = await fetch(apiUrl, {

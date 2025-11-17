@@ -13,6 +13,7 @@ import {
 import { Link, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
 import Checkbox from "expo-checkbox";
+import { API_BASE_URL } from '../../utils/api';
 
 // Define a type for our ingredient object for TypeScript
 interface Ingredient {
@@ -41,7 +42,7 @@ const IngredientsScreen = () => {
         setLoading(true);
         setError(null);
         // Always fetch page 1 when the screen is focused
-        const apiUrl = "http://192.168.1.12:3001/api/ingredients?page=1&limit=20"; // ❗ Use your IP
+        const apiUrl = `${API_BASE_URL}/ingredients?page=1&limit=20`;
 
         try {
           const response = await fetch(apiUrl);
@@ -53,6 +54,7 @@ const IngredientsScreen = () => {
           setIngredients(data.items); // Set the first page of items
           setTotalItems(data.total); // Set the total count
           setPage(1); // Reset the page count
+          setSearchQuery("");
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -72,7 +74,7 @@ const IngredientsScreen = () => {
 
     setIsLoadingMore(true);
     const nextPage = page + 1; // Get the next page number
-    const apiUrl = "http://192.168.1.12:3001/api/ingredients?page=${nextPage}&limit=20"; // ❗ Use your IP
+    const apiUrl = `${API_BASE_URL}/ingredients?page=${nextPage}&limit=20`;
 
     try {
       const response = await fetch(apiUrl);
@@ -111,7 +113,7 @@ const IngredientsScreen = () => {
         {
           text: "Delete",
           onPress: async () => {
-            const apiUrl = "http://192.168.1.12:3001/api/ingredients/${id}"; // ❗ Use your IP
+            const apiUrl = `${API_BASE_URL}/ingredients/${id}`;
 
             try {
               const response = await fetch(apiUrl, {
@@ -166,7 +168,7 @@ const IngredientsScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
+            const apiUrl = `${API_BASE_URL}/ingredients`;
             try {
               const response = await fetch(apiUrl, {
                 method: "DELETE",

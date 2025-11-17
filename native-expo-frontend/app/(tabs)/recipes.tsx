@@ -13,6 +13,7 @@ import {
 import { useFocusEffect, Link } from "expo-router";
 import Constants from "expo-constants";
 import Checkbox from "expo-checkbox";
+import { API_BASE_URL } from '../../utils/api';
 
 // Define a type for our recipe object
 interface Recipe {
@@ -39,7 +40,7 @@ const RecipesScreen = () => {
       const fetchInitialData = async () => {
         setLoading(true);
         setError(null);
-        const apiUrl = "http://192.168.1.12:3001/api/recipes?page=1&limit=20"; // ❗ Use your IP
+        const apiUrl = `${API_BASE_URL}/recipes?page=1&limit=20`;
         try {
           const response = await fetch(apiUrl);
           if (!response.ok)
@@ -50,6 +51,7 @@ const RecipesScreen = () => {
           setRecipes(data.items); // Set the first page of recipes
           setTotalItems(data.total); // Set the total count
           setPage(1); // Reset the page count
+          setSearchQuery("");
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -69,7 +71,7 @@ const RecipesScreen = () => {
 
     setIsLoadingMore(true);
     const nextPage = page + 1;
-    const apiUrl = `http://192.168.1.12:3001/api/recipes?page=${nextPage}&limit=20`; // ❗ Use your IP
+    const apiUrl = `${API_BASE_URL}/recipes?page=${nextPage}&limit=20`;
 
     try {
       const response = await fetch(apiUrl);
@@ -82,7 +84,7 @@ const RecipesScreen = () => {
       setRecipes((prevRecipes) => [...prevRecipes, ...data.items]);
       setPage(nextPage);
     } catch (e: any) {
-      console.error("Failed to load more items:", e);
+      console.error(`Failed to load more items:`, e);
     } finally {
       setIsLoadingMore(false);
     }
@@ -99,9 +101,10 @@ const RecipesScreen = () => {
   }, [searchQuery, recipes]);
 
   // --- Handlers ---
+
   const handleDelete = (id: number) => {
     Alert.alert(
-      "Delete Recipe", // <-- FIX 1
+      "Delete Recipe",
       "Are you sure you want to delete this recipe? This action cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
@@ -109,7 +112,7 @@ const RecipesScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = "http://192.168.1.12:3001/api/recipes/${id}"; // ❗ Use your IP
+            const apiUrl = `${API_BASE_URL}/recipes/${id}`;
 
             try {
               const response = await fetch(apiUrl, {
@@ -149,7 +152,7 @@ const RecipesScreen = () => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = "http://192.168.1.12:3001/api/recipes"; // ❗ Use your IP
+            const apiUrl = `${API_BASE_URL}/recipes`;
             try {
               const response = await fetch(apiUrl, {
                 method: "DELETE",

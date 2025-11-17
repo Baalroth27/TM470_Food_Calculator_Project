@@ -7,14 +7,17 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { useRouter, useLocalSearchParams, Stack } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
+import { API_BASE_URL } from "../utils/api";
 
 const IngredientFormScreen = () => {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -32,7 +35,7 @@ const IngredientFormScreen = () => {
       setIsEditing(true);
       setLoading(true);
       const fetchIngredientData = async () => {
-        const apiUrl = `http://192.168.1.12:3001/api/ingredients/${id}`; // ❗ Use your IP
+        const apiUrl = `${API_BASE_URL}/ingredients/${id}`;
         try {
           const response = await fetch(apiUrl);
           if (!response.ok) throw new Error("Failed to fetch ingredient data");
@@ -76,17 +79,19 @@ const IngredientFormScreen = () => {
     setLoading(true);
     // Determine the URL and Method based on whether we are editing
     const apiUrl = isEditing
-      ? `http://192.168.1.12:3001/api/ingredients/${id}`
-      : "http://192.168.1.12:3001/api/ingredients";
+      ? `${API_BASE_URL}/ingredients/${id}`
+      : `${API_BASE_URL}/ingredients`;
     const method = isEditing ? "PUT" : "POST";
 
     try {
       const body = {
         name: formData.name,
         standard_measurement_unit: formData.standard_measurement_unit,
-        purchase_pack_price: parseFloat(formData.purchase_pack_price),
+        purchase_pack_price: parseFloat(
+          formData.purchase_pack_price.replace(",", ".")
+        ),
         pack_quantity_in_standard_units: parseFloat(
-          formData.pack_quantity_in_standard_units
+          formData.pack_quantity_in_standard_units.replace(",", ".")
         ),
       };
 
@@ -124,7 +129,6 @@ const IngredientFormScreen = () => {
         options={{ title: isEditing ? "Edit Ingredient" : "Add Ingredient" }}
       />
       <SafeAreaView style={styles.container}>
-
         <View style={styles.form}>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -157,18 +161,14 @@ const IngredientFormScreen = () => {
           />
 
           <Text style={styles.label}>Unit of Measurement</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.standard_measurement_unit}
-              onValueChange={(itemValue, itemIndex) =>
-                handleInputChange("standard_measurement_unit", itemValue)
-              }
-            >
-              <Picker.Item label="grams (g)" value="g" />
-              <Picker.Item label="milliliters (ml)" value="ml" />
-              <Picker.Item label="piece (pc)" value="pc" />
-            </Picker>
-          </View>
+          <TouchableOpacity
+            style={styles.pickerButton}
+            onPress={() => setIsPickerVisible(true)}
+          >
+            <Text style={styles.pickerButtonText}>
+              {formData.standard_measurement_unit}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -190,6 +190,34 @@ const IngredientFormScreen = () => {
             )}
           </TouchableOpacity>
         </View>
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isPickerVisible}
+          onRequestClose={() => setIsPickerVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.doneButton}
+                onPress={() => setIsPickerVisible(false)}
+              >
+                <Text style={styles.doneButtonText}>Done</Text>
+              </TouchableOpacity>
+              <Picker
+                itemStyle={{ height: 200, color: "black" }}
+                selectedValue={formData.standard_measurement_unit}
+                onValueChange={(itemValue) =>
+                  handleInputChange("standard_measurement_unit", itemValue)
+                }
+              >
+                <Picker.Item label="grams (g)" value="g" />
+                <Picker.Item label="milliliters (ml)" value="ml" />
+                <Picker.Item label="piece (pc)" value="pc" />
+              </Picker>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </>
   );
@@ -227,13 +255,40 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     marginBottom: 20,
   },
-  pickerContainer: {
+  pickerButton: {
     backgroundColor: "#fff",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#ddd",
     marginBottom: 20,
-    justifyContent: "center", // Helps align the picker text on Android
+    height: 50,
+    justifyContent: "center",
+  },
+  pickerButtonText: {
+    fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end", // Aligns modal to the bottom
+    backgroundColor: "rgba(0,0,0,0.5)", // Dims the background
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  doneButton: {
+    alignItems: "flex-end",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  doneButtonText: {
+    color: "#6200ee",
+    fontSize: 18,
+    fontWeight: "600",
   },
   buttonContainer: {
     flexDirection: "row",

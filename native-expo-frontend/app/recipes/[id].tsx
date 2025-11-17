@@ -9,12 +9,14 @@ import {
   TextInput,
   FlatList,
   InteractionManager,
+  Modal,
 } from "react-native";
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useLocalSearchParams, useFocusEffect, Link, Stack } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import type { KeyboardAwareScrollView as KeyboardAwareScrollViewType } from "react-native-keyboard-aware-scroll-view";
+import { API_BASE_URL } from "../../utils/api";
 
 // Define the types for our data
 interface RecipeIngredient {
@@ -28,6 +30,9 @@ interface RecipeDetails {
   name: string;
   selling_price: string;
   ingredients: RecipeIngredient[];
+  final_yield_weight_grams: string | null;
+  serving_portions: number | null;
+  calculated_cost: string;
 }
 interface AllIngredients {
   id: number;
@@ -41,6 +46,8 @@ const RecipeDetailScreen = () => {
   const inputRefs = useRef(new Map());
 
   const [recipe, setRecipe] = useState<RecipeDetails | null>(null);
+  const [yieldWeight, setYieldWeight] = useState("");
+  const [servingPortions, setServingPortions] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allIngredients, setAllIngredients] = useState<AllIngredients[]>([]); // To hold all ingredients for the picker
@@ -53,6 +60,7 @@ const RecipeDetailScreen = () => {
     null
   );
   const [editingQuantity, setEditingQuantity] = useState("");
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   // --- Data Fetching Logic ---
   const fetchData = useCallback(async () => {
@@ -60,8 +68,8 @@ const RecipeDetailScreen = () => {
     setLoading(true);
     setError(null);
     try {
-      const recipeApiUrl = `http://192.168.1.12:3001/api/recipes/${id}`; // ❗ Use your IP
-      const ingredientsApiUrl = "http://192.168.1.12:3001/api/ingredients"; // ❗ Use your IP
+      const recipeApiUrl = `${API_BASE_URL}/recipes/${id}`;
+      const ingredientsApiUrl = `${API_BASE_URL}/ingredients`;
 
       const [recipeResponse, ingredientsResponse] = await Promise.all([
         fetch(recipeApiUrl),
@@ -74,11 +82,14 @@ const RecipeDetailScreen = () => {
 
       const recipeData = await recipeResponse.json();
       const allIngredientsData = await ingredientsResponse.json();
+      setAllIngredients(allIngredientsData.items);
 
       setRecipe(recipeData);
-      setAllIngredients(allIngredientsData);
-      if (allIngredientsData.length > 0 && selectedIngredientId === null) {
-        setSelectedIngredientId(allIngredientsData[0].id);
+      if (
+        allIngredientsData.items.length > 0 &&
+        selectedIngredientId === null
+      ) {
+        setSelectedIngredientId(allIngredientsData.items[0].id);
       }
     } catch (e: any) {
       setError(e.message);
@@ -94,6 +105,14 @@ const RecipeDetailScreen = () => {
       fetchData();
     }, [fetchData])
   );
+
+  useEffect(() => {
+    if (recipe) {
+      // Set the input fields with data from the recipe, converting null/0 to empty strings
+      setYieldWeight(recipe.final_yield_weight_grams?.toString() || "");
+      setServingPortions(recipe.serving_portions?.toString() || "");
+    }
+  }, [recipe]); // This effect runs whenever the main 'recipe' object changes
 
   const selectedIngredient = allIngredients.find(
     (ing) => ing.id === selectedIngredientId
@@ -112,7 +131,7 @@ const RecipeDetailScreen = () => {
 
     // Fetch Logic
     setIsAdding(true);
-    const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients`; // ❗ Use your IP
+    const apiUrl = `${API_BASE_URL}/recipes/${id}/ingredients`;
 
     try {
       const body = {
@@ -155,23 +174,25 @@ const RecipeDetailScreen = () => {
     }
   };
 
-const startEditing = (item: RecipeIngredient) => {
-  setEditingIngredientId(item.ingredient_id);
-  setEditingQuantity(item.quantity);
+  const startEditing = (item: RecipeIngredient) => {
+    setEditingIngredientId(item.ingredient_id);
+    setEditingQuantity(item.quantity);
 
-  InteractionManager.runAfterInteractions(() => {
-    const inputRef = inputRefs.current.get(item.ingredient_id);
-    if (inputRef) {
-      // Increase the offset slightly for a better feel
-      scrollViewRef.current?.scrollToFocusedInput(inputRef, 150);
-    }
-  });
-};
+    InteractionManager.runAfterInteractions(() => {
+      const inputRef = inputRefs.current.get(item.ingredient_id);
+      if (inputRef) {
+        // Increase the offset slightly for a better feel
+        scrollViewRef.current?.scrollToFocusedInput(inputRef, 150);
+      }
+    });
+  };
 
   const cancelEditing = () => {
     setEditingIngredientId(null);
     setEditingQuantity("");
   };
+
+  // --- Handlers ---
 
   const handleUpdateIngredient = async () => {
     if (
@@ -182,7 +203,7 @@ const startEditing = (item: RecipeIngredient) => {
       Alert.alert("Error", "Please enter a valid quantity.");
       return;
     }
-    const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients/${editingIngredientId}`; // ❗ Use your IP
+    const apiUrl = `${API_BASE_URL}/recipes/${id}/ingredients/${editingIngredientId}`;
     try {
       const response = await fetch(apiUrl, {
         method: "PUT",
@@ -208,7 +229,7 @@ const startEditing = (item: RecipeIngredient) => {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            const apiUrl = `http://192.168.1.12:3001/api/recipes/${id}/ingredients/${ingredientId}`; // ❗ Use your IP
+            const apiUrl = `${API_BASE_URL}/recipes/${id}/ingredients/${ingredientId}`;
             try {
               const response = await fetch(apiUrl, { method: "DELETE" });
               if (!response.ok) throw new Error("Failed to remove ingredient");
@@ -220,6 +241,80 @@ const startEditing = (item: RecipeIngredient) => {
         },
       ]
     );
+  };
+
+  const handleSaveYield = async () => {
+    const payload: {
+      final_yield_weight_grams?: number;
+      serving_portions?: number;
+    } = {};
+
+    // Validate and prepare the weight, if it was entered
+    if (yieldWeight.trim() !== "") {
+      const weight = parseFloat(yieldWeight.replace(",", "."));
+      if (isNaN(weight) || weight < 0) {
+        Alert.alert(
+          "Invalid Input",
+          "Final weight must be a valid, non-negative number."
+        );
+        return;
+      }
+      payload.final_yield_weight_grams = weight;
+    }
+
+    // Validate and prepare the portions, if it was entered
+    if (servingPortions.trim() !== "") {
+      const portions = parseInt(servingPortions, 10);
+      if (isNaN(portions) || portions < 0) {
+        Alert.alert(
+          "Invalid Input",
+          "Number of servings must be a valid, non-negative integer."
+        );
+        return;
+      }
+      payload.serving_portions = portions;
+    }
+
+    // Check if there's anything to save
+    if (Object.keys(payload).length === 0) {
+      Alert.alert("No Input", "Please enter a value to save.");
+      return;
+    }
+
+    // Make the API call with the dynamic payload
+    const apiUrl = `${API_BASE_URL}/recipes/${id}/yield`;
+    try {
+      const response = await fetch(apiUrl, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload), // Send only the provided data
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save yield information.");
+      }
+
+      // Optimistically update the UI state with the new values
+      setRecipe((currentRecipe) => {
+        if (!currentRecipe) return null;
+
+        // Create a new object with the updated values, ensuring correct types
+        const updatedData = { ...currentRecipe };
+        if (payload.final_yield_weight_grams !== undefined) {
+          updatedData.final_yield_weight_grams =
+            payload.final_yield_weight_grams.toString(); // Convert number to string
+        }
+        if (payload.serving_portions !== undefined) {
+          updatedData.serving_portions = payload.serving_portions;
+        }
+
+        return updatedData;
+      });
+
+      Alert.alert("Success", "Yield information has been saved.");
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
   };
 
   // --- Render Logic ---
@@ -242,7 +337,7 @@ const startEditing = (item: RecipeIngredient) => {
       >
         <View style={styles.detailsContainer}>
           <Text style={styles.details}>
-            Selling Price: €{parseFloat(recipe.selling_price).toFixed(2)}
+            Selling Price: €{parseFloat(recipe.selling_price.replace(",", ".")).toFixed(2)}
           </Text>
           <Link
             href={{ pathname: "/recipe-form", params: { id: recipe.id } }}
@@ -256,42 +351,106 @@ const startEditing = (item: RecipeIngredient) => {
 
         <View style={styles.addIngredientContainer}>
           <Text style={styles.subHeader}>Add Ingredient</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              mode="dialog"
-              selectedValue={selectedIngredientId}
-              onValueChange={(itemValue) => setSelectedIngredientId(itemValue)}
-            >
-              {allIngredients.map((ing) => (
-                <Picker.Item key={ing.id} label={ing.name} value={ing.id} />
-              ))}
-            </Picker>
-          </View>
-          <View style={styles.quantityContainer}>
-            <TextInput
-              style={styles.quantityInput}
-              placeholder="Amount"
-              keyboardType="decimal-pad"
-              value={quantity}
-              onChangeText={setQuantity}
-            />
-            <Text style={styles.unitText}>
+          <TouchableOpacity
+            style={styles.pickerButton}
+            onPress={() => setIsPickerVisible(true)}
+          >
+            <Text style={styles.pickerButtonText}>
               {selectedIngredient
-                ? selectedIngredient.standard_measurement_unit
-                : ""}
+                ? selectedIngredient.name
+                : "Select an ingredient..."}
             </Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleAddIngredient}
-              disabled={isAdding}
-            >
-              {isAdding ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.addButtonText}>+</Text>
-              )}
-            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.quantityContainer}>
+          <TextInput
+            style={styles.quantityInput}
+            placeholder="Amount"
+            keyboardType="decimal-pad"
+            value={quantity}
+            onChangeText={setQuantity}
+          />
+          <Text style={styles.unitText}>
+            {selectedIngredient
+              ? selectedIngredient.standard_measurement_unit
+              : ""}
+          </Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddIngredient}
+            disabled={isAdding}
+          >
+            {isAdding ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.addButtonText}>+</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.yieldContainer}>
+          <Text style={styles.subHeader}>Yield Information</Text>
+
+          <View style={styles.inputRow}>
+            <Text style={styles.label}>Final Weight (grams)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="decimal-pad"
+              placeholder="e.g., 1850"
+              value={yieldWeight}
+              onChangeText={setYieldWeight}
+            />
           </View>
+
+          <View style={styles.inputRow}>
+            <Text style={styles.label}>Number of Servings</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              placeholder="e.g., 8"
+              value={servingPortions}
+              onChangeText={setServingPortions}
+            />
+          </View>
+
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveYield}>
+            <Text style={styles.saveButtonText}>Save Yield</Text>
+          </TouchableOpacity>
+
+          {/* --- Calculated Costs Display --- */}
+          {/* Only show this entire block if at least ONE of the yield values is valid */}
+          {recipe &&
+          (parseFloat(recipe.final_yield_weight_grams ?? "0") > 0 ||
+            (recipe.serving_portions ?? 0) > 0) ? (
+            <View style={styles.resultsContainer}>
+              {/* Only show Cost per Portion if serving_portions is valid */}
+              {(recipe.serving_portions ?? 0) > 0 ? (
+                <View style={styles.resultItem}>
+                  <Text style={styles.resultLabel}>Cost per Portion</Text>
+                  <Text style={styles.resultValue}>
+                    {`€${(
+                      parseFloat(recipe.calculated_cost.replace(",", ".")) /
+                      recipe.serving_portions!
+                    ).toFixed(2)}`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Only show Cost per Kg if final_yield_weight_grams is valid */}
+              {parseFloat(recipe.final_yield_weight_grams ?? "0") > 0 ? (
+                <View style={styles.resultItem}>
+                  <Text style={styles.resultLabel}>Cost per Kg</Text>
+                  <Text style={styles.resultValue}>
+                    {`€${(
+                      (parseFloat(recipe.calculated_cost) /
+                        parseFloat(recipe.final_yield_weight_grams!)) *
+                      1000
+                    ).toFixed(2)}`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <Text style={styles.subHeader}>Current Ingredients</Text>
@@ -306,15 +465,17 @@ const startEditing = (item: RecipeIngredient) => {
             return (
               <View style={styles.itemContainer}>
                 {isCurrentlyEditing ? (
-                  // EDITING VIEW
                   <>
+                    {/* --- Editing view --- */}
                     <TextInput
                       style={styles.editInput}
                       value={editingQuantity}
                       onChangeText={setEditingQuantity}
                       keyboardType="decimal-pad"
                       autoFocus={true}
-                      ref={(el) => { inputRefs.current.set(item.ingredient_id, el); }}
+                      ref={(el) => {
+                        inputRefs.current.set(item.ingredient_id, el);
+                      }}
                     />
                     <View style={styles.itemActions}>
                       <TouchableOpacity
@@ -332,12 +493,12 @@ const startEditing = (item: RecipeIngredient) => {
                     </View>
                   </>
                 ) : (
-                  // DISPLAY VIEW
                   <>
+                    {/* --- Display view --- */}
                     <View>
                       <Text style={styles.itemName}>{item.name}</Text>
                       <Text style={styles.itemDetails}>
-                        {parseFloat(item.quantity)} {item.unit}
+                        {`${parseFloat(item.quantity)} ${item.unit}`}
                       </Text>
                     </View>
                     <View style={styles.itemActions}>
@@ -368,6 +529,34 @@ const startEditing = (item: RecipeIngredient) => {
           }
           ListFooterComponent={<View style={{ height: 400 }} />}
         />
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isPickerVisible}
+          onRequestClose={() => setIsPickerVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.doneButton}
+                onPress={() => setIsPickerVisible(false)}
+              >
+                <Text style={styles.doneButtonText}>Done</Text>
+              </TouchableOpacity>
+              <Picker
+                selectedValue={selectedIngredientId}
+                onValueChange={(itemValue) =>
+                  setSelectedIngredientId(itemValue)
+                }
+                itemStyle={{ color: "black" }}
+              >
+                {allIngredients.map((ing) => (
+                  <Picker.Item key={ing.id} label={ing.name} value={ing.id} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );
@@ -466,14 +655,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  pickerContainer: {
+  pickerButton: {
     backgroundColor: "#fff",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#ddd",
-    marginBottom: 10,
+    marginBottom: 20,
+    height: 50,
     justifyContent: "center",
-    overflow: "hidden",
+  },
+  pickerButtonText: {
+    fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end", // Aligns modal to the bottom
+    backgroundColor: "rgba(0,0,0,0.5)", // Dims the background
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  doneButton: {
+    alignItems: "flex-end",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  doneButtonText: {
+    color: "#6200ee",
+    fontSize: 18,
+    fontWeight: "600",
   },
   quantityContainer: {
     flexDirection: "row",
@@ -512,6 +727,62 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
+  },
+  yieldContainer: {
+    paddingHorizontal: 16,
+    marginVertical: 20,
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 8,
+  },
+  inputRow: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 16,
+    color: "#333",
+    marginBottom: 5,
+  },
+  input: {
+    backgroundColor: "#F7F5FF",
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  saveButton: {
+    backgroundColor: "#6200ee",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  resultsContainer: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    paddingTop: 15,
+  },
+  resultItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  resultLabel: {
+    fontSize: 16,
+    color: "#333",
+  },
+  resultValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#6200ee",
   },
 });
 
